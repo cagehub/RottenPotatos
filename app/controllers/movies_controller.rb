@@ -8,6 +8,14 @@ class MoviesController < ApplicationController
 
   def index
     @movies = Movie.all
+    
+    if params["sort"] == "newest"
+      #@movies.sort_by! {|movie| movie.release_date}
+      @movies.sort! {|a,b| b.release_date <=> a.release_date}
+      @release_date_class = 'hilite'
+    else
+      @release_date_class = ''
+    end
   end
 
   def new

@@ -6,7 +6,7 @@
     %tr
       %th Movie Title
       %th Rating
-      %th Release Date
+      %th{:class => @release_date_class}= link_to 'Release Date', 'movies?sort=newest', :id => 'release_date_header'
       %th More Info
   %tbody
     - @movies.each do |movie|
