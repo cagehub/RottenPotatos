@@ -6,52 +6,43 @@ class MoviesController < ApplicationController
     # will render app/views/movies/show.<extension> by default
   end
 
-  def index
-    #debugger
-    @movies = Array.new
-    
-    if not @all_ratings
-      @all_ratings = Hash.new
-      
-      Movie.ratings.each {|rating| 
-        @all_ratings[rating] = true
-      }
-    end
-    
-    if params["commit"] == "Refresh"
-      Movie.ratings.each {|rating| 
-        if params["ratings"] and params["ratings"].has_key?(rating)
-          @all_ratings[rating] = true
-        else
-          @all_ratings[rating] = false
-        end
-      }
-    end
+  def getCurrentRatings
+    ratings = Hash.new
 
     if params["ratings"]
-      @current_ratings = params["ratings"]
+      Movie.ratings.each {|rating| 
+        if params["ratings"].has_key?(rating) and params["ratings"][rating] == "true"
+          ratings[rating] = true
+        else
+          ratings[rating] = false
+        end
+      }
     else
-      @current_ratings = {}
+      Movie.ratings.each {|rating| 
+        ratings[rating] = true
+      }
     end
     
+    return ratings
+  end
+
+  def index
+    @movies = Array.new
+    @all_ratings = getCurrentRatings()
+    
+    #if params["commit"] == "Refresh"
+    #end
+    
+    condition = {:conditions => ["rating IN (?)", @all_ratings.select {|k, v| v == true}.keys]}
+    
     if params["sort"] == "release_date"
-      #@movies.sort! {|a,b| b.release_date <=> a.release_date}
-      debugger
-      temp =  @current_ratings.keys
-      @movies = Movie.find(:all, :conditions => ["rating IN (?)", @current_ratings.keys], :order => "release_date")
+      @movies = Movie.find(:all, condition, :order => "release_date")
       @release_date_class = 'hilite'
     elsif params["sort"] == "title"
-      @movies = Movie.find(:all, :order => "title")
+      @movies = Movie.find(:all, condition, :order => "title")
       @title_class = 'hilite'
     else
-      if params["commit"] == "Refresh"
-        if @current_ratings
-          @current_ratings.each_key {|rating| @movies += Movie.find_all_by_rating(rating)}
-        end
-      else
-        @movies = Movie.all
-      end
-      
+      @movies = Movie.find(:all, condition)
       @release_date_class = ''
       @title_class = ''
     end
