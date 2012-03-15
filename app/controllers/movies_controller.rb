@@ -10,86 +10,98 @@ class MoviesController < ApplicationController
     session["ratings"] = @all_ratings
     session["sort"] = params["sort"]
   end
-  
-  def tryRestoreSession
-    if (not params["ratings"]) or (not params["sort"])
-      redir_params = Hash.new
-      if not params["ratings"]
-        redir_params = redir_params.merge!({"ratings" => session["ratings"]})
-      else
-        redir_params = redir_params.merge!({"ratings" => params["ratings"]})
-      end
-      
-      if not params["sort"]
-        redir_params = redir_params.merge!({"sort" => session["sort"]})
-      else
-        redir_params = redir_params.merge!({"sort" => params["sort"]})
-      end
-      
-      redirect_to movies_path(redir_params)
-    end
+
+  def getDefaultRatings
+    ratings = Hash.new
+    Movie.ratings.each {|rating| 
+      ratings[rating] = true
+    }
+    return ratings
   end
 
   def getCurrentRatings
     ratings = Hash.new
-
-    if params["ratings"]
-      Movie.ratings.each {|rating| 
-        if params["ratings"].has_key?(rating) and params["ratings"][rating] == "true"
-          ratings[rating] = true
-        else
-          ratings[rating] = false
-        end
-      }
-    else
-      Movie.ratings.each {|rating|
+    Movie.ratings.each {|rating| 
+      if params["ratings"] and params["ratings"].has_key?(rating) and params["ratings"][rating] == "true"
+        ratings[rating] = true
+      else
         ratings[rating] = false
-      }
-    end
-    
+      end
+    }
     return ratings
   end
   
-  def getAllRatings
-    ratings = Hash.new
-    
-    Movie.ratings.each {|rating|
-      ratings[rating] = true
-    }
-    
-    return ratings
+  def sortParamValid?(sort_param)
+    if sort_param == "release_date" or sort_param == "title"
+      return true
+    else
+      return false
+    end
+  end
+  
+  def setSortedColumnHilite
+    case params["sort"]
+    when "release_date"
+      @release_date_class = 'hilite'
+      @title_class = ''
+    when "title"
+      @release_date_class = ''
+      @title_class = 'hilite'
+    end
   end
 
   def index
-    # if user was refreshing then lets redirect to RESTful page
-    # if user wasn't refreshing and there are no "ratings" and "sort" then user came probably from "/movies"
-    # so lets redirect to RESTful page
-    if params["commit"] == "Refresh"
-      return redirect_to movies_path("ratings" => getCurrentRatings())
-    elsif not params["ratings"] and not params["sort"]
-      return redirect_to movies_path("ratings" => getAllRatings(), "sort" => "title")
-    end
-    
-    tryRestoreSession()
-    
-    @movies = Array.new
-    @all_ratings = getCurrentRatings()
-    
-    condition = {:conditions => ["rating IN (?)", @all_ratings.select {|k, v| v == true}.keys]}
-    
-    if params["sort"] == "release_date"
-      @movies = Movie.find(:all, condition, :order => "release_date")
-      @release_date_class = 'hilite'
-    elsif params["sort"] == "title"
-      @movies = Movie.find(:all, condition, :order => "title")
-      @title_class = 'hilite'
+    need_to_redirect = false
+    redir_params = Hash.new
+  
+    if params["ratings"] and params["sort"] and sortParamValid?(params["sort"])
+      # everything needed is in params, can return correct site
+      @movies = Array.new
+      @all_ratings = getCurrentRatings()
+      
+      setSortedColumnHilite()
+      
+      condition = {:conditions => ["rating IN (?)", @all_ratings.select {|k, v| v == true}.keys]}
+      
+      @movies = Movie.find(:all, condition, :order => params["sort"])
+      
+      storeSession()
+    elsif params["commit"] == "Refresh"
+      need_to_redirect = true
+      
+      @all_ratings = getCurrentRatings()
+      
+      redir_params["ratings"] = @all_ratings
+      if session["sort"] and sortParamValid?(session["sort"])
+        redir_params["sort"] = session["sort"]
+      else
+        redir_params["sort"] = "title"
+      end
     else
-      @movies = Movie.find(:all, condition)
-      @release_date_class = ''
-      @title_class = ''
+      # something is missing, lets try to fill in from session or if that fails then 
+      # set to default values and redirect
+      need_to_redirect = true
+      
+      if params["ratings"]
+        redir_params["ratings"] = params["ratings"]
+      elsif session["ratings"]
+        redir_params["ratings"] = session["ratings"]
+      else
+        redir_params["ratings"] = getDefaultRatings()
+      end
+      
+      if params["sort"] and sortParamValid?(params["sort"])
+        redir_params["sort"] = params["sort"]
+      elsif session["sort"]
+        redir_params["sort"] = session["sort"]
+      else
+        redir_params["sort"] = "title"
+      end
     end
     
-    storeSession()
+    if need_to_redirect
+      redirect_to movies_path(redir_params)
+    end
   end
 
   def new
